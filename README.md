@@ -1,19 +1,142 @@
 # AI Developer Debugger
 
-An **MCP-powered agentic AI debugging platform**. Instead of asking an LLM "what does this error mean?", it lets an AI agent *investigate your actual project* — searching source code, inspecting git history, and retrieving documentation through the **Model Context Protocol (MCP)** — then returns an evidence-backed root cause, a suggested fix, and a confidence score. The investigation streams to the UI in real time.
+An **MCP-powered agentic AI debugging platform**. Instead of asking an LLM "what does this error mean?", it lets an AI agent *investigate your actual project* — searching source code, inspecting git history, and retrieving documentation through the **Model Context Protocol (MCP)** — then returns an evidence-backed root cause, a suggested fix, and a confidence score. The investigation streams to the UI in real time over SSE.
 
-> This is the **MVP**. See `docs`/the plan for the deferred roadmap (auth, Logs/DB MCP servers, human-in-the-loop write approvals, CI/CD).
+```
+User error
+   ↓
+AI Debugging Agent  ──plans──►  selects MCP tools  ──►  GitHub/Git + Docs MCP servers
+   ↑                                                         ↓
+   └────────── reasons over evidence ◄── tool results ◄──────┘
+   ↓
+Root cause + evidence (verified vs. assumption) + suggested fix + confidence
+```
 
-## Monorepo layout
+This is the **MVP**. See the [Roadmap](#roadmap) for what's deferred.
+
+## Why this is agentic (and not a chatbot)
+
+The agent runs a real tool-calling loop: it classifies the error, forms a plan, then repeatedly decides which MCP tool to call next, reads the result, and keeps going until it has enough evidence — only then does it produce a structured diagnosis. Tools are exposed through MCP servers that run as **separate processes** the backend talks to over stdio, exactly as a real MCP host would.
+
+## Architecture
 
 ```
 ai-developer-debugger/
-├── shared/   # Shared TypeScript types (SSE events, API contracts)
-├── server/   # Node + Express backend: MCP host + agent + RAG + API
-├── client/   # React + Vite + Tailwind frontend
-└── docker-compose.yml  # Local Postgres + pgvector
+├── shared/   # Shared TypeScript types (SSE events, diagnosis, API contracts)
+├── server/   # Node + Express: MCP host, agent loop, RAG, REST+SSE API
+│   └── src/
+│       ├── agent/      # the agentic debugging loop + prompts
+│       ├── llm/        # provider abstraction (OpenAI implementation)
+│       ├── mcp/        # MCP host client + registry
+│       │   └── servers/
+│       │       ├── github/  # read-only Git/GitHub MCP server (local clone)
+│       │       └── docs/     # documentation MCP server (pgvector RAG)
+│       ├── rag/        # extraction, chunking, embeddings, retrieval
+│       ├── routes/     # projects, repositories, documents, debug (SSE)
+│       └── db/         # schema + migrations (Postgres + pgvector)
+└── client/   # React + Vite + Tailwind frontend
 ```
 
-## Status
+### Tech stack
 
-Scaffolding in place. Setup and run instructions are added in the final step of the build. See `.env.example` for required configuration.
+- **Frontend:** React, TypeScript, Tailwind CSS, Vite
+- **Backend:** Node.js, TypeScript, Express
+- **AI:** LLM provider abstraction (OpenAI by default), tool calling, multi-step reasoning
+- **MCP:** `@modelcontextprotocol/sdk` — custom MCP host client + custom MCP servers
+- **Database:** PostgreSQL + pgvector
+- **RAG:** document ingestion → chunking → embeddings → vector similarity search
+- **Realtime:** Server-Sent Events (SSE)
+- **Testing:** Vitest + Supertest
+
+## Prerequisites
+
+- Node.js ≥ 20
+- Docker (for the local Postgres + pgvector database)
+- An OpenAI API key (used for chat + embeddings)
+
+## Setup
+
+```bash
+# 1. Install dependencies (installs all workspaces)
+npm install
+
+# 2. Configure environment
+cp .env.example .env
+#   → set OPENAI_API_KEY in .env
+
+# 3. Start Postgres + pgvector
+npm run db:up
+
+# 4. Apply the database schema
+npm run migrate
+```
+
+## Run
+
+```bash
+npm run dev
+```
+
+- Backend: http://localhost:4000
+- Frontend: http://localhost:5173
+
+The `dev` script builds the `shared` package first, then runs the server and client together.
+
+## Usage
+
+1. **Create a project** on the home page.
+2. **Connect a GitHub repository** by URL — it's cloned locally for read-only investigation. (Public repos need no token; set `GITHUB_TOKEN` for private ones.)
+3. **Upload documentation** (`.md`, `.txt`, `.pdf`) — it's chunked, embedded, and stored in pgvector.
+4. **Enter an error / stack trace** (try the built-in sample: `HanaError: SQL syntax error near 'DEFINERLANGUAGE'`).
+5. **Start the investigation** and watch the agent work in real time — each MCP tool call appears with its arguments and result summary.
+6. Read the **diagnosis**: root cause, evidence (each tagged **Verified** or **Assumption**), suggested fix, affected files, confidence, and documentation references.
+7. Every session is **saved** and replayable from the project's History.
+
+## MCP servers & tools
+
+| Server | Transport | Tools | Access |
+| --- | --- | --- | --- |
+| `github` | stdio | `search_code`, `get_file`, `list_files`, `get_recent_commits`, `get_commit`, `get_git_diff` | read-only, on a local clone |
+| `docs` | stdio | `search_docs`, `get_document` | read-only, pgvector RAG |
+
+All tools are **read-only** in the MVP (Section 12 of the spec): no file writes, no SQL execution.
+
+## Testing
+
+```bash
+npm test            # runs the server test suite
+```
+
+Covers RAG chunking, the repository path-traversal guard, the agent's multi-step tool-calling workflow (with a mocked LLM + mocked MCP), and API request validation.
+
+## Configuration
+
+See [`.env.example`](.env.example). Key variables:
+
+| Variable | Purpose |
+| --- | --- |
+| `DATABASE_URL` | Postgres connection string (defaults to the Docker Compose DB on port 5433) |
+| `OPENAI_API_KEY` | OpenAI key for chat + embeddings |
+| `OPENAI_MODEL` / `OPENAI_EMBEDDING_MODEL` | model selection |
+| `EMBEDDING_DIMENSIONS` | must match the `vector(...)` column (1536 for `text-embedding-3-small`) |
+| `WORKSPACE_DIR` | where repositories are cloned |
+| `AGENT_MAX_STEPS` | safety bound on the tool-calling loop |
+
+## Security notes
+
+- Secrets live only in `.env` (gitignored); `.env.example` documents the required keys.
+- MCP tool inputs are validated with zod; every tool execution is logged to the `tool_calls` table.
+- Database access via MCP is read-only.
+- `npm audit` reports advisories in some transitive/dev dependencies (e.g. the Vite/esbuild and simple-git toolchains). These are pinned to avoid breaking major upgrades in the MVP; revisit before production.
+
+## Roadmap (post-MVP)
+
+- Logs MCP, Database MCP (schema/validation), and a standalone Git MCP server
+- Authentication (JWT + Google OAuth) and per-project authorization
+- Human-in-the-loop approval for any write operations
+- Docker Compose for the full stack, GitHub Actions CI/CD, and cloud deployment
+- Advanced observability of agent runs
+
+## License
+
+MIT
