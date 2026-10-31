@@ -1,0 +1,27 @@
+{
+  "name": "ai-developer-debugger",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MCP-powered agentic AI debugging platform that investigates errors across source code, git history, and documentation.",
+  "license": "MIT",
+  "workspaces": [
+    "shared",
+    "server",
+    "client"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "npm run build --workspace shared && npm run build --workspace server && npm run build --workspace client",
+    "dev": "concurrently -n server,client -c blue,magenta \"npm run dev --workspace server\" \"npm run dev --workspace client\"",
+    "migrate": "npm run migrate --workspace server",
+    "test": "npm run test --workspace server",
+    "typecheck": "npm run typecheck --workspace shared && npm run typecheck --workspace server && npm run typecheck --workspace client",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}
