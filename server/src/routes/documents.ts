@@ -21,6 +21,7 @@ function sourceTypeFor(filename: string): DocumentSourceType {
 }
 
 documentsRouter.get('/', async (req, res) => {
+  const { projectId } = req.params as { projectId: string };
   const { rows } = await query<{
     id: string;
     project_id: string;
@@ -37,7 +38,7 @@ documentsRouter.get('/', async (req, res) => {
       WHERE d.project_id = $1
       GROUP BY d.id
       ORDER BY d.created_at DESC`,
-    [req.params.projectId],
+    [projectId],
   );
   const docs: DocumentMeta[] = rows.map((r) => ({
     id: r.id,
@@ -57,7 +58,7 @@ documentsRouter.post('/', upload.single('file'), async (req, res) => {
     res.status(400).json({ error: 'No file uploaded (field name: "file").' });
     return;
   }
-  const projectId = req.params.projectId!;
+  const projectId = (req.params as { projectId: string }).projectId;
   const title = (req.body?.title as string) || file.originalname;
   const sourceType = sourceTypeFor(file.originalname);
 

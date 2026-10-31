@@ -11,12 +11,14 @@ const createSchema = z.object({
   description: z.string().max(2000).optional(),
 });
 
-function mapProject(r: {
+type ProjectRow = {
   id: string;
   name: string;
   description: string | null;
   created_at: string;
-}): Project {
+};
+
+function mapProject(r: ProjectRow): Project {
   return {
     id: r.id,
     name: r.name,
@@ -26,7 +28,7 @@ function mapProject(r: {
 }
 
 projectsRouter.get('/', async (_req, res) => {
-  const { rows } = await query(
+  const { rows } = await query<ProjectRow>(
     `SELECT id, name, description, created_at FROM projects
       WHERE user_id = $1 ORDER BY created_at DESC`,
     [LOCAL_USER_ID],
@@ -40,7 +42,7 @@ projectsRouter.post('/', async (req, res) => {
     res.status(400).json({ error: parsed.error.issues });
     return;
   }
-  const { rows } = await query(
+  const { rows } = await query<ProjectRow>(
     `INSERT INTO projects (user_id, name, description)
      VALUES ($1, $2, $3) RETURNING id, name, description, created_at`,
     [LOCAL_USER_ID, parsed.data.name, parsed.data.description ?? null],
@@ -49,7 +51,7 @@ projectsRouter.post('/', async (req, res) => {
 });
 
 projectsRouter.get('/:projectId', async (req, res) => {
-  const { rows } = await query(
+  const { rows } = await query<ProjectRow>(
     `SELECT id, name, description, created_at FROM projects WHERE id = $1`,
     [req.params.projectId],
   );

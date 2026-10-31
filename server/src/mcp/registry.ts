@@ -34,7 +34,8 @@ const SERVERS: ServerSpec[] = [
   {
     name: 'github',
     dir: 'github',
-    env: (ctx) => (ctx.repoPath ? { REPO_PATH: ctx.repoPath } : {}),
+    env: (ctx): Record<string, string> =>
+      ctx.repoPath ? { REPO_PATH: ctx.repoPath } : {},
   },
   {
     name: 'docs',
@@ -55,7 +56,8 @@ function launchFor(serverDir: string): { command: string; args: string[] } {
     const pkg = JSON.parse(readFileSync(tsxPkg, 'utf8')) as {
       bin: string | Record<string, string>;
     };
-    const binRel = typeof pkg.bin === 'string' ? pkg.bin : pkg.bin.tsx;
+    const binRel =
+      (typeof pkg.bin === 'string' ? pkg.bin : pkg.bin.tsx) ?? 'dist/cli.mjs';
     const tsxBin = join(dirname(tsxPkg), binRel);
     return { command: process.execPath, args: [tsxBin, entry] };
   }

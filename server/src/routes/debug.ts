@@ -34,7 +34,7 @@ debugRouter.post('/debug', async (req, res) => {
     res.status(400).json({ error: parsed.error.issues });
     return;
   }
-  const projectId = req.params.projectId!;
+  const projectId = (req.params as { projectId: string }).projectId;
   const { errorText } = parsed.data;
   const title = parsed.data.title || errorText.split('\n')[0]!.slice(0, 120);
 
@@ -86,13 +86,15 @@ debugRouter.post('/debug', async (req, res) => {
 
 /** GET /api/projects/:projectId/sessions — list past debugging sessions. */
 debugRouter.get('/sessions', async (req, res) => {
-  const sessions = await listSessions(req.params.projectId!);
+  const { projectId } = req.params as { projectId: string };
+  const sessions = await listSessions(projectId);
   res.json(sessions);
 });
 
 /** GET /api/projects/:projectId/sessions/:sessionId — full session detail. */
 debugRouter.get('/sessions/:sessionId', async (req, res) => {
-  const detail = await getSessionDetail(req.params.sessionId!);
+  const { sessionId } = req.params as { sessionId: string };
+  const detail = await getSessionDetail(sessionId);
   if (!detail) {
     res.status(404).json({ error: 'Session not found' });
     return;

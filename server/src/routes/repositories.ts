@@ -12,7 +12,7 @@ const connectSchema = z.object({
   defaultBranch: z.string().min(1).max(200).optional(),
 });
 
-function mapRepo(r: {
+type RepoRow = {
   id: string;
   project_id: string;
   provider: string;
@@ -21,7 +21,9 @@ function mapRepo(r: {
   local_path: string | null;
   last_cloned_at: string | null;
   created_at: string;
-}): Repository {
+};
+
+function mapRepo(r: RepoRow): Repository {
   return {
     id: r.id,
     projectId: r.project_id,
@@ -35,9 +37,10 @@ function mapRepo(r: {
 }
 
 repositoriesRouter.get('/', async (req, res) => {
-  const { rows } = await query(
+  const { projectId } = req.params as { projectId: string };
+  const { rows } = await query<RepoRow>(
     `SELECT * FROM repositories WHERE project_id = $1 ORDER BY created_at DESC`,
-    [req.params.projectId],
+    [projectId],
   );
   res.json(rows.map(mapRepo));
 });
@@ -48,7 +51,7 @@ repositoriesRouter.post('/', async (req, res) => {
     res.status(400).json({ error: parsed.error.issues });
     return;
   }
-  const projectId = req.params.projectId!;
+  const { projectId } = req.params as { projectId: string };
   const defaultBranch = parsed.data.defaultBranch ?? 'main';
 
   // Insert first to obtain the id used as the clone directory name.
@@ -65,7 +68,7 @@ repositoriesRouter.post('/', async (req, res) => {
       url: parsed.data.url,
       defaultBranch,
     });
-    const { rows } = await query(
+    const { rows } = await query<RepoRow>(
       `UPDATE repositories
           SET local_path = $2, last_cloned_at = now()
         WHERE id = $1 RETURNING *`,
