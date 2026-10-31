@@ -1,6 +1,7 @@
 -- Initial schema for the AI Developer Debugger.
--- NOTE: the embedding dimension (1536) must match EMBEDDING_DIMENSIONS in .env
--- and the model configured in OPENAI_EMBEDDING_MODEL (text-embedding-3-small).
+-- NOTE: __EMBEDDING_DIM__ is substituted at migrate time from EMBEDDING_DIMENSIONS
+-- in .env, and must match the embedding model in OPENAI_EMBEDDING_MODEL
+-- (1536 for OpenAI text-embedding-3-small; 768 for Ollama nomic-embed-text; etc.).
 
 CREATE EXTENSION IF NOT EXISTS vector;
 CREATE EXTENSION IF NOT EXISTS "pgcrypto"; -- for gen_random_uuid()
@@ -52,7 +53,7 @@ CREATE TABLE IF NOT EXISTS document_chunks (
   chunk_index INTEGER NOT NULL,
   content     TEXT NOT NULL,
   token_count INTEGER NOT NULL DEFAULT 0,
-  embedding   VECTOR(1536),
+  embedding   VECTOR(__EMBEDDING_DIM__),
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_chunks_document ON document_chunks(document_id);

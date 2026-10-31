@@ -1,6 +1,7 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { env } from '../config/env.js';
 import { pool, closePool } from './pool.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -34,10 +35,15 @@ async function migrate(): Promise<void> {
       continue;
     }
     const sql = await readFile(join(MIGRATIONS_DIR, file), 'utf8');
+    // Substitute build-time placeholders (e.g. the embedding vector dimension).
+    const prepared = sql.replaceAll(
+      '__EMBEDDING_DIM__',
+      String(env.EMBEDDING_DIMENSIONS),
+    );
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      await client.query(sql);
+      await client.query(prepared);
       await client.query('INSERT INTO schema_migrations (name) VALUES ($1)', [
         file,
       ]);

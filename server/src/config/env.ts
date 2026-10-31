@@ -19,6 +19,9 @@ const envSchema = z.object({
   // LLM configuration (used by the agent/RAG layers added in later modules).
   LLM_PROVIDER: z.enum(['openai']).default('openai'),
   OPENAI_API_KEY: z.string().default(''),
+  // Optional OpenAI-compatible endpoint (e.g. Ollama/Groq/OpenRouter). When set,
+  // the API key is optional so you can run fully locally and free.
+  OPENAI_BASE_URL: z.string().default(''),
   OPENAI_MODEL: z.string().default('gpt-4o'),
   OPENAI_EMBEDDING_MODEL: z.string().default('text-embedding-3-small'),
   EMBEDDING_DIMENSIONS: z.coerce.number().default(1536),

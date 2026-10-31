@@ -20,12 +20,18 @@ export class OpenAiProvider implements LlmProvider {
   private readonly embeddingModel: string;
 
   constructor() {
-    if (!env.OPENAI_API_KEY) {
+    const usingCustomEndpoint = Boolean(env.OPENAI_BASE_URL);
+    if (!env.OPENAI_API_KEY && !usingCustomEndpoint) {
       throw new Error(
-        'OPENAI_API_KEY is not set. Add it to your .env to use the OpenAI provider.',
+        'OPENAI_API_KEY is not set. Add it to your .env, or set OPENAI_BASE_URL to use a local/compatible endpoint.',
       );
     }
-    this.client = new OpenAI({ apiKey: env.OPENAI_API_KEY });
+    this.client = new OpenAI({
+      // Local endpoints (e.g. Ollama) don't require a real key, but the SDK
+      // needs a non-empty string.
+      apiKey: env.OPENAI_API_KEY || 'not-needed',
+      ...(usingCustomEndpoint ? { baseURL: env.OPENAI_BASE_URL } : {}),
+    });
     this.model = env.OPENAI_MODEL;
     this.embeddingModel = env.OPENAI_EMBEDDING_MODEL;
   }

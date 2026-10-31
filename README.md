@@ -82,6 +82,29 @@ npm run dev
 
 The `dev` script builds the `shared` package first, then runs the server and client together.
 
+### Run fully free & local (Ollama)
+
+Because the backend uses the OpenAI SDK, you can point it at any **OpenAI-compatible** endpoint and pay nothing. With [Ollama](https://ollama.com):
+
+```bash
+ollama pull qwen2.5-coder      # a tool-calling capable chat model
+ollama pull nomic-embed-text   # embeddings
+
+# in .env:
+OPENAI_BASE_URL=http://localhost:11434/v1
+OPENAI_MODEL=qwen2.5-coder
+OPENAI_EMBEDDING_MODEL=nomic-embed-text
+EMBEDDING_DIMENSIONS=768
+```
+
+The embedding dimension sizes the database vector column at migrate time, so it must match your embedding model. **If you change `EMBEDDING_DIMENSIONS` after already migrating, recreate the DB** so the column is resized:
+
+```bash
+npm run db:down && npm run db:up && npm run migrate
+```
+
+> Tool calling quality varies by local model; `qwen2.5-coder` and `llama3.1` handle it well. Hosted OpenAI-compatible providers (Groq, OpenRouter, Together) work the same way — just set `OPENAI_BASE_URL` and `OPENAI_API_KEY`.
+
 ## Usage
 
 1. **Create a project** on the home page.
@@ -116,9 +139,10 @@ See [`.env.example`](.env.example). Key variables:
 | Variable | Purpose |
 | --- | --- |
 | `DATABASE_URL` | Postgres connection string (defaults to the Docker Compose DB on port 5433) |
-| `OPENAI_API_KEY` | OpenAI key for chat + embeddings |
+| `OPENAI_API_KEY` | OpenAI key for chat + embeddings (not required when `OPENAI_BASE_URL` is set) |
+| `OPENAI_BASE_URL` | Optional OpenAI-compatible endpoint for local/free providers (e.g. Ollama) |
 | `OPENAI_MODEL` / `OPENAI_EMBEDDING_MODEL` | model selection |
-| `EMBEDDING_DIMENSIONS` | must match the `vector(...)` column (1536 for `text-embedding-3-small`) |
+| `EMBEDDING_DIMENSIONS` | must match the embedding model; sizes the DB `vector(...)` column at migrate time |
 | `WORKSPACE_DIR` | where repositories are cloned |
 | `AGENT_MAX_STEPS` | safety bound on the tool-calling loop |
 
