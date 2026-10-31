@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: ai-debugger-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: debugger
+      POSTGRES_PASSWORD: debugger
+      POSTGRES_DB: debugger
+    ports:
+      # Host 5433 -> container 5432 to avoid clashing with a local Postgres.
+      - "5433:5432"
+    volumes:
+      - debugger_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U debugger -d debugger"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  debugger_pgdata:
