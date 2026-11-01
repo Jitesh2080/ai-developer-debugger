@@ -10,7 +10,7 @@ import {
   type McpContext,
 } from '../mcp/registry.js';
 import type { AgentEmitter, RecordedToolCall } from './events.js';
-import { ANALYSIS_PROMPT, FINAL_INSTRUCTION, SYSTEM_PROMPT } from './prompts.js';
+import { ANALYSIS_PROMPT, FINAL_INSTRUCTION, SYNTHESIS_PROMPT, SYSTEM_PROMPT } from './prompts.js';
 
 export interface InvestigationInput {
   projectId: string;
@@ -163,7 +163,20 @@ export async function runInvestigation(
     let step = 0;
     const maxSteps = env.AGENT_MAX_STEPS;
     while (step < maxSteps) {
-      const turn = await provider.chatWithTools(messages, tools);
+      let turn;
+      try {
+        turn = await provider.chatWithTools(messages, tools);
+      } catch (err) {
+        // A rejected turn (e.g. a strict backend refusing a malformed tool
+        // call) shouldn't abort the whole investigation — finalize with the
+        // evidence gathered so far.
+        emit({
+          type: 'status',
+          level: 'warn',
+          message: `Stopping investigation early: ${(err as Error).message.slice(0, 160)}`,
+        });
+        break;
+      }
 
       if (turn.toolCalls.length === 0) {
         if (turn.content.trim()) emit({ type: 'reasoning', message: turn.content });
@@ -231,11 +244,33 @@ export async function runInvestigation(
     }
 
     // ---- Phase 3: final structured diagnosis ----
+    // Run synthesis in a FRESH, tool-free context: carrying the tool-calling
+    // history can prime some models (e.g. gpt-oss via Groq) to attempt another
+    // tool call, which strict backends reject. Passing evidence as text avoids
+    // that and keeps the final step deterministic.
     emit({ type: 'status', message: 'Analyzing evidence…', level: 'info' });
-    messages.push({ role: 'user', content: FINAL_INSTRUCTION });
-    const finalRaw = await provider.chatWithTools(messages, [], {
-      responseFormatJson: true,
-    });
+
+    const evidenceTranscript =
+      recorded
+        .map(
+          (r, i) =>
+            `[Tool ${i + 1}] ${r.server}.${r.tool}(${JSON.stringify(
+              r.arguments,
+            )}) =>\n${r.resultText.slice(0, 1500)}`,
+        )
+        .join('\n\n') || '(no tools were called)';
+
+    const finalRaw = await provider.chatWithTools(
+      [
+        { role: 'system', content: SYNTHESIS_PROMPT },
+        {
+          role: 'user',
+          content: `ERROR:\n${input.errorText}\n\nEVIDENCE GATHERED FROM TOOLS:\n${evidenceTranscript}\n\n${FINAL_INSTRUCTION}`,
+        },
+      ],
+      [],
+      { responseFormatJson: true },
+    );
 
     const diagnosis = coerceDiagnosis(finalRaw.content);
     // Integrity guard: evidence cannot be "verified" if no tool ever ran.

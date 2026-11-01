@@ -19,6 +19,8 @@ export const ANALYSIS_PROMPT = `Analyze the following error/stack trace. Respond
   "plan": ["<step 1>", "<step 2>", "... 3-6 concise investigation steps"]
 }`;
 
+export const SYNTHESIS_PROMPT = `You are summarizing a COMPLETED debugging investigation. Do NOT call any tools — the investigation is over. Based only on the error and the tool evidence provided, produce the final diagnosis.`;
+
 export const FINAL_INSTRUCTION = `You have finished investigating. Produce your FINAL diagnosis as a single JSON object with EXACTLY this shape:
 {
   "rootCause": "<clear explanation of the most likely root cause>",

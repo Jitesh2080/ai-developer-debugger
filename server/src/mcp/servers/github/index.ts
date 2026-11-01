@@ -11,21 +11,27 @@ const server = new McpServer({ name: 'github-mcp', version: '0.1.0' });
 
 const text = (t: string) => ({ content: [{ type: 'text' as const, text: t }] });
 
+/** Clamp a model-supplied numeric arg into a safe range (schemas are kept
+ * permissive so strict backends like Groq don't reject slightly-off values). */
+const clamp = (n: number | undefined, def: number, min: number, max: number) =>
+  Math.min(Math.max(Math.floor(n ?? def), min), max);
+
 server.tool(
   'search_code',
   'Search the repository source code for a pattern (ripgrep-style via git grep). Returns matching file:line:text.',
   {
     query: z.string().describe('Substring or regex to search for'),
-    maxResults: z.number().int().positive().max(100).optional(),
+    maxResults: z.number().optional().describe('Max matches (default 40)'),
     ignoreCase: z.boolean().optional(),
   },
-  async ({ query, maxResults = 40, ignoreCase = true }) => {
+  async ({ query, maxResults, ignoreCase = true }) => {
+    const limit = clamp(maxResults, 40, 1, 100);
     const args = ['grep', '-n', '-I', '--no-color'];
     if (ignoreCase) args.push('-i');
     args.push('-e', query);
     try {
       const out = await git().raw(args);
-      const lines = out.split('\n').filter(Boolean).slice(0, maxResults);
+      const lines = out.split('\n').filter(Boolean).slice(0, limit);
       if (lines.length === 0) return text(`No matches for "${query}".`);
       return text(lines.join('\n'));
     } catch {
@@ -40,13 +46,17 @@ server.tool(
   'Read a file from the repository, optionally a line range. Paths are relative to the repo root.',
   {
     path: z.string(),
-    startLine: z.number().int().positive().optional(),
-    endLine: z.number().int().positive().optional(),
+    startLine: z.number().optional(),
+    endLine: z.number().optional(),
   },
   async ({ path, startLine, endLine }) => {
     const abs = safeResolve(getRepoRoot(), path);
     try {
-      const content = await readFileSlice(abs, startLine, endLine);
+      const content = await readFileSlice(
+        abs,
+        startLine ? clamp(startLine, 1, 1, 1_000_000) : undefined,
+        endLine ? clamp(endLine, 1, 1, 1_000_000) : undefined,
+      );
       return text(content || '(empty file)');
     } catch (err) {
       return text(`Could not read ${path}: ${(err as Error).message}`);
@@ -59,13 +69,14 @@ server.tool(
   'List git-tracked files in the repository, optionally filtered by a path prefix.',
   {
     prefix: z.string().optional().describe('Only list files under this path'),
-    maxResults: z.number().int().positive().max(1000).optional(),
+    maxResults: z.number().optional().describe('Max files (default 300)'),
   },
-  async ({ prefix, maxResults = 300 }) => {
+  async ({ prefix, maxResults }) => {
+    const limit = clamp(maxResults, 300, 1, 1000);
     const out = await git().raw(['ls-files']);
     let files = out.split('\n').filter(Boolean);
     if (prefix) files = files.filter((f) => f.startsWith(prefix));
-    const shown = files.slice(0, maxResults);
+    const shown = files.slice(0, limit);
     const suffix =
       files.length > shown.length
         ? `\n... (${files.length - shown.length} more)`
@@ -77,9 +88,9 @@ server.tool(
 server.tool(
   'get_recent_commits',
   'List the most recent commits (sha, author, date, subject).',
-  { limit: z.number().int().positive().max(50).optional() },
-  async ({ limit = 10 }) => {
-    const log = await git().log({ maxCount: limit });
+  { limit: z.number().optional().describe('Number of commits (default 10)') },
+  async ({ limit }) => {
+    const log = await git().log({ maxCount: clamp(limit, 10, 1, 50) });
     const lines = log.all.map(
       (c) =>
         `${c.hash.slice(0, 10)}  ${c.date}  ${c.author_name}\n    ${c.message}`,
