@@ -19,12 +19,18 @@ const envSchema = z.object({
   // LLM configuration (used by the agent/RAG layers added in later modules).
   LLM_PROVIDER: z.enum(['openai']).default('openai'),
   OPENAI_API_KEY: z.string().default(''),
-  // Optional OpenAI-compatible endpoint (e.g. Ollama/Groq/OpenRouter). When set,
-  // the API key is optional so you can run fully locally and free.
+  // Optional OpenAI-compatible endpoint for CHAT (e.g. Ollama/Groq/OpenRouter).
+  // When set, the API key is optional so you can run fully locally and free.
   OPENAI_BASE_URL: z.string().default(''),
   OPENAI_MODEL: z.string().default('gpt-4o'),
   OPENAI_EMBEDDING_MODEL: z.string().default('text-embedding-3-small'),
   EMBEDDING_DIMENSIONS: z.coerce.number().default(1536),
+
+  // Optional SEPARATE endpoint for EMBEDDINGS. Lets you use a strong chat
+  // provider that lacks embeddings (e.g. Groq) while embedding locally with
+  // Ollama. When empty, embeddings reuse the chat endpoint above.
+  OPENAI_EMBEDDING_BASE_URL: z.string().default(''),
+  OPENAI_EMBEDDING_API_KEY: z.string().default(''),
 
   // Where connected repositories are cloned for local investigation.
   WORKSPACE_DIR: z.string().default('./workspace'),

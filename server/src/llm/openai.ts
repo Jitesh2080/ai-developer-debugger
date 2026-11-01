@@ -17,6 +17,7 @@ export class OpenAiProvider implements LlmProvider {
   readonly name = 'openai';
   readonly model: string;
   private readonly client: OpenAI;
+  private readonly embeddingClient: OpenAI;
   private readonly embeddingModel: string;
 
   constructor() {
@@ -26,12 +27,26 @@ export class OpenAiProvider implements LlmProvider {
         'OPENAI_API_KEY is not set. Add it to your .env, or set OPENAI_BASE_URL to use a local/compatible endpoint.',
       );
     }
+    // Chat client (OPENAI_BASE_URL / OPENAI_API_KEY).
     this.client = new OpenAI({
       // Local endpoints (e.g. Ollama) don't require a real key, but the SDK
       // needs a non-empty string.
       apiKey: env.OPENAI_API_KEY || 'not-needed',
       ...(usingCustomEndpoint ? { baseURL: env.OPENAI_BASE_URL } : {}),
     });
+
+    // Embedding client: a separate endpoint when configured (so a chat-only
+    // provider like Groq can pair with local Ollama embeddings); otherwise the
+    // same client as chat.
+    if (env.OPENAI_EMBEDDING_BASE_URL) {
+      this.embeddingClient = new OpenAI({
+        apiKey: env.OPENAI_EMBEDDING_API_KEY || 'not-needed',
+        baseURL: env.OPENAI_EMBEDDING_BASE_URL,
+      });
+    } else {
+      this.embeddingClient = this.client;
+    }
+
     this.model = env.OPENAI_MODEL;
     this.embeddingModel = env.OPENAI_EMBEDDING_MODEL;
   }
@@ -89,7 +104,7 @@ export class OpenAiProvider implements LlmProvider {
 
   async embed(texts: string[]): Promise<number[][]> {
     if (texts.length === 0) return [];
-    const response = await this.client.embeddings.create({
+    const response = await this.embeddingClient.embeddings.create({
       model: this.embeddingModel,
       input: texts,
     });

@@ -105,6 +105,24 @@ npm run db:down && npm run db:up && npm run migrate
 
 > Tool calling quality varies by local model; `qwen2.5-coder` and `llama3.1` handle it well. Hosted OpenAI-compatible providers (Groq, OpenRouter, Together) work the same way — just set `OPENAI_BASE_URL` and `OPENAI_API_KEY`.
 
+### Free *and* strong (Groq chat + local embeddings)
+
+For much sharper diagnoses at **$0**, use Groq's free tier (a 70B-class model) for chat and keep embeddings local in Ollama. Chat and embeddings can target **separate** endpoints:
+
+```bash
+# Chat → Groq (free API key from https://console.groq.com/keys)
+OPENAI_BASE_URL=https://api.groq.com/openai/v1
+OPENAI_API_KEY=gsk_your_groq_key
+OPENAI_MODEL=llama-3.3-70b-versatile
+
+# Embeddings → local Ollama (Groq has no embeddings API)
+OPENAI_EMBEDDING_BASE_URL=http://localhost:11434/v1
+OPENAI_EMBEDDING_MODEL=nomic-embed-text
+EMBEDDING_DIMENSIONS=768
+```
+
+When `OPENAI_EMBEDDING_BASE_URL` is empty, embeddings reuse the chat endpoint. Remember to recreate the DB if `EMBEDDING_DIMENSIONS` changes.
+
 ## Usage
 
 1. **Create a project** on the home page.
