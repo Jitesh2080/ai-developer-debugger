@@ -238,6 +238,13 @@ export async function runInvestigation(
     });
 
     const diagnosis = coerceDiagnosis(finalRaw.content);
+    // Integrity guard: evidence cannot be "verified" if no tool ever ran.
+    if (recorded.length === 0) {
+      diagnosis.evidence = diagnosis.evidence.map((e) => ({
+        ...e,
+        verified: false,
+      }));
+    }
     emit({ type: 'final', solution: diagnosis });
 
     return {
