@@ -2,6 +2,7 @@ import type {
   DebugSessionDetail,
   DebugSessionSummary,
   Diagnosis,
+  ProjectStats,
   Repository,
   ToolCallRecord,
 } from '@ai-debugger/shared';
@@ -284,4 +285,66 @@ export async function projectHasDocs(projectId: string): Promise<boolean> {
     [projectId],
   );
   return Number(rows[0]?.count ?? '0') > 0;
+}
+
+/** Aggregate metrics for a project's investigations (for the observability panel). */
+export async function getProjectStats(projectId: string): Promise<ProjectStats> {
+  const sessions = await query<{ status: string; count: string }>(
+    `SELECT status, COUNT(*)::text AS count FROM debug_sessions
+      WHERE project_id = $1 GROUP BY status`,
+    [projectId],
+  );
+  const byStatus = new Map(sessions.rows.map((r) => [r.status, Number(r.count)]));
+  const totalSessions = [...byStatus.values()].reduce((a, b) => a + b, 0);
+
+  const conf = await query<{ avg: string | null }>(
+    `SELECT AVG(sol.confidence)::numeric(10,1)::text AS avg
+       FROM solutions sol
+       JOIN debug_sessions s ON s.id = sol.debug_session_id
+      WHERE s.project_id = $1`,
+    [projectId],
+  );
+
+  const tools = await query<{ total: string; avg_ms: string | null }>(
+    `SELECT COUNT(*)::text AS total, AVG(tc.duration_ms)::numeric(10,0)::text AS avg_ms
+       FROM tool_calls tc
+       JOIN agent_runs ar ON ar.id = tc.agent_run_id
+       JOIN debug_sessions s ON s.id = ar.debug_session_id
+      WHERE s.project_id = $1`,
+    [projectId],
+  );
+
+  const steps = await query<{ avg: string | null }>(
+    `SELECT AVG(ar.step_count)::numeric(10,1)::text AS avg
+       FROM agent_runs ar
+       JOIN debug_sessions s ON s.id = ar.debug_session_id
+      WHERE s.project_id = $1`,
+    [projectId],
+  );
+
+  const usage = await query<{ server_name: string; tool_name: string; count: string }>(
+    `SELECT tc.server_name, tc.tool_name, COUNT(*)::text AS count
+       FROM tool_calls tc
+       JOIN agent_runs ar ON ar.id = tc.agent_run_id
+       JOIN debug_sessions s ON s.id = ar.debug_session_id
+      WHERE s.project_id = $1
+      GROUP BY tc.server_name, tc.tool_name
+      ORDER BY count DESC`,
+    [projectId],
+  );
+
+  return {
+    totalSessions,
+    completedSessions: byStatus.get('completed') ?? 0,
+    failedSessions: byStatus.get('failed') ?? 0,
+    avgConfidence: conf.rows[0]?.avg ? Number(conf.rows[0].avg) : null,
+    totalToolCalls: Number(tools.rows[0]?.total ?? '0'),
+    avgToolDurationMs: tools.rows[0]?.avg_ms ? Number(tools.rows[0].avg_ms) : null,
+    avgStepsPerRun: steps.rows[0]?.avg ? Number(steps.rows[0].avg) : null,
+    toolUsage: usage.rows.map((r) => ({
+      server: r.server_name,
+      tool: r.tool_name,
+      count: Number(r.count),
+    })),
+  };
 }

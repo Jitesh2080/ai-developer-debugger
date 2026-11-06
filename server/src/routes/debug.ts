@@ -15,6 +15,7 @@ import {
   finishAgentRun,
   getLatestRepository,
   getSessionDetail,
+  getProjectStats,
   listSessions,
   projectHasDocs,
   saveError,
@@ -95,6 +96,12 @@ debugRouter.get('/sessions', async (req, res) => {
   const { projectId } = req.params as { projectId: string };
   const sessions = await listSessions(projectId);
   res.json(sessions);
+});
+
+/** GET /api/projects/:projectId/stats — aggregate investigation metrics. */
+debugRouter.get('/stats', async (req, res) => {
+  const { projectId } = req.params as { projectId: string };
+  res.json(await getProjectStats(projectId));
 });
 
 /** GET /api/projects/:projectId/sessions/:sessionId — full session detail. */

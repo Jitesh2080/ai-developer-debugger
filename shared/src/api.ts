@@ -88,3 +88,14 @@ export interface FixProposal {
   createdAt: string;
   resolvedAt: string | null;
 }
+
+export interface ProjectStats {
+  totalSessions: number;
+  completedSessions: number;
+  failedSessions: number;
+  avgConfidence: number | null;
+  totalToolCalls: number;
+  avgToolDurationMs: number | null;
+  avgStepsPerRun: number | null;
+  toolUsage: Array<{ server: string; tool: string; count: number }>;
+}

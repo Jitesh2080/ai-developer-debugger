@@ -5,6 +5,7 @@ import type {
   DocumentMeta,
   FixProposal,
   Project,
+  ProjectStats,
   Repository,
 } from '@ai-debugger/shared';
 import { clearToken, getToken } from '../auth/token';
@@ -106,6 +107,8 @@ export const api = {
 
   listSessions: (projectId: string) =>
     json<DebugSessionSummary[]>(`/api/projects/${projectId}/sessions`),
+  getStats: (projectId: string) =>
+    json<ProjectStats>(`/api/projects/${projectId}/stats`),
   getSession: (projectId: string, sessionId: string) =>
     json<DebugSessionDetail>(
       `/api/projects/${projectId}/sessions/${sessionId}`,

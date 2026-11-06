@@ -12,6 +12,7 @@ import { api, streamInvestigation } from '../api/client';
 import { Layout } from '../components/Layout';
 import { Timeline } from '../components/Timeline';
 import { DiagnosisCard } from '../components/DiagnosisCard';
+import { StatsPanel } from '../components/StatsPanel';
 
 const SAMPLE_ERROR = `HanaError: SQL syntax error near 'DEFINERLANGUAGE'`;
 
@@ -121,6 +122,8 @@ export function ProjectPage() {
       <div className="mt-6 grid gap-6 lg:grid-cols-[320px_1fr]">
         {/* Left column: setup + history */}
         <aside className="space-y-6">
+          <StatsPanel projectId={projectId} />
+
           <section className="rounded-xl border border-ink-700 bg-ink-800/50 p-4">
             <h2 className="text-sm font-semibold text-slate-200">Repository</h2>
             <form onSubmit={handleConnectRepo} className="mt-3 space-y-2">
