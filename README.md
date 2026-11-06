@@ -139,8 +139,33 @@ When `OPENAI_EMBEDDING_BASE_URL` is empty, embeddings reuse the chat endpoint. R
 | --- | --- | --- | --- |
 | `github` | stdio | `search_code`, `get_file`, `list_files`, `get_recent_commits`, `get_commit`, `get_git_diff` | read-only, on a local clone |
 | `docs` | stdio | `search_docs`, `get_document` | read-only, pgvector RAG |
+| `database` | stdio | `get_schema`, `get_table_schema`, `get_column_info`, `validate_sql`, `explain_query` | read-only; EXPLAIN-only, never executes queries |
+| `logs` | stdio | `search_logs`, `get_recent_logs`, `get_error_context` | read-only, over `*.log` in `LOGS_DIR` |
 
-All tools are **read-only** in the MVP (Section 12 of the spec): no file writes, no SQL execution.
+All tools are **read-only**: no file writes, no SQL execution. The database server
+only ever PLANs statements (EXPLAIN, no ANALYZE) inside a rolled-back READ ONLY
+transaction. The one exception is the opt-in, human-approved fix flow below.
+
+## Authentication
+
+All `/api/projects/*` routes require a JWT. Users register/login with email +
+password, or **Sign in with Google** (enabled when `GOOGLE_CLIENT_ID` is set).
+Projects are scoped per user — you only see your own. See `.env.example` for the
+auth and OAuth variables.
+
+## Human-in-the-loop fixes
+
+After a diagnosis, the agent can **propose a corrected file**. You review the
+proposed content + explanation and **Approve** or **Reject**. Nothing is written
+to disk unless `ENABLE_WRITE_ACTIONS=true` — and even then, only the file in the
+local clone, only on approval. Read-only is the default.
+
+## Observability
+
+Each project has a metrics panel (and `GET /api/projects/:id/stats`): number of
+investigations, completion rate, average confidence, tool-call counts, average
+steps per run, average tool duration, and most-used tools — all derived from the
+`agent_runs` / `tool_calls` tables.
 
 ## Testing
 
@@ -148,7 +173,9 @@ All tools are **read-only** in the MVP (Section 12 of the spec): no file writes,
 npm test            # runs the server test suite
 ```
 
-Covers RAG chunking, the repository path-traversal guard, the agent's multi-step tool-calling workflow (with a mocked LLM + mocked MCP), and API request validation.
+Covers RAG chunking, the repository path-traversal guard, text-emitted tool-call
+recovery, the agent's multi-step tool-calling workflow (mocked LLM + mocked MCP),
+and API auth/validation.
 
 ## Configuration
 
@@ -157,27 +184,34 @@ See [`.env.example`](.env.example). Key variables:
 | Variable | Purpose |
 | --- | --- |
 | `DATABASE_URL` | Postgres connection string (defaults to the Docker Compose DB on port 5433) |
-| `OPENAI_API_KEY` | OpenAI key for chat + embeddings (not required when `OPENAI_BASE_URL` is set) |
-| `OPENAI_BASE_URL` | Optional OpenAI-compatible endpoint for local/free providers (e.g. Ollama) |
-| `OPENAI_MODEL` / `OPENAI_EMBEDDING_MODEL` | model selection |
+| `OPENAI_API_KEY` / `OPENAI_BASE_URL` | chat provider (OpenAI, or any compatible endpoint like Groq/Ollama) |
+| `OPENAI_EMBEDDING_BASE_URL` / `_MODEL` | optional separate embedding endpoint |
 | `EMBEDDING_DIMENSIONS` | must match the embedding model; sizes the DB `vector(...)` column at migrate time |
-| `WORKSPACE_DIR` | where repositories are cloned |
-| `AGENT_MAX_STEPS` | safety bound on the tool-calling loop |
+| `WORKSPACE_DIR` / `CLONE_DEPTH` | where repos are cloned, and shallow-clone depth |
+| `AGENT_MAX_STEPS` / `LLM_MAX_RETRIES` | tool-loop bound; retries for transient 429s |
+| `JWT_SECRET` / `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | auth + Google OAuth |
+| `DB_MCP_URL` / `LOGS_DIR` | Database MCP target; Logs MCP log directory |
+| `ENABLE_WRITE_ACTIONS` | allow approved fixes to be written to the clone (default off) |
+
+## Deployment
+
+See [`DEPLOY.md`](DEPLOY.md) for build-from-source (Render/Railway + Vercel),
+Docker, managed Postgres, and Google OAuth setup.
 
 ## Security notes
 
 - Secrets live only in `.env` (gitignored); `.env.example` documents the required keys.
-- MCP tool inputs are validated with zod; every tool execution is logged to the `tool_calls` table.
-- Database access via MCP is read-only.
-- `npm audit` reports advisories in some transitive/dev dependencies (e.g. the Vite/esbuild and simple-git toolchains). These are pinned to avoid breaking major upgrades in the MVP; revisit before production.
+- All `/api/projects/*` routes require a JWT; project access is checked per user.
+- MCP tool inputs are validated with zod; every tool execution is logged to `tool_calls`.
+- Database access via MCP is read-only (EXPLAIN-only, rolled back); file writes require explicit human approval and an opt-in flag.
+- `npm audit` reports advisories in some transitive/dev dependencies (Vite/esbuild, simple-git). These are pinned to avoid breaking major upgrades; revisit before production.
 
-## Roadmap (post-MVP)
+## Roadmap (what's next)
 
-- Logs MCP, Database MCP (schema/validation), and a standalone Git MCP server
-- Authentication (JWT + Google OAuth) and per-project authorization
-- Human-in-the-loop approval for any write operations
-- Docker Compose for the full stack, GitHub Actions CI/CD, and cloud deployment
-- Advanced observability of agent runs
+- **Semantic code search** — embed repo code into pgvector so `search_code` matches by meaning, not just `git grep` (the main remaining capability).
+- Warm/pooled MCP servers and clone search caching for speed.
+- Richer observability (token/cost tracking) and API rate limiting.
+- Cancel-in-progress investigations from the UI.
 
 ## License
 
