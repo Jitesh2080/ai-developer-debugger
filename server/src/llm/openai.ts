@@ -32,6 +32,8 @@ export class OpenAiProvider implements LlmProvider {
       // Local endpoints (e.g. Ollama) don't require a real key, but the SDK
       // needs a non-empty string.
       apiKey: env.OPENAI_API_KEY || 'not-needed',
+      // SDK retries transient errors (429/5xx) with exponential backoff.
+      maxRetries: env.LLM_MAX_RETRIES,
       ...(usingCustomEndpoint ? { baseURL: env.OPENAI_BASE_URL } : {}),
     });
 
@@ -41,6 +43,7 @@ export class OpenAiProvider implements LlmProvider {
     if (env.OPENAI_EMBEDDING_BASE_URL) {
       this.embeddingClient = new OpenAI({
         apiKey: env.OPENAI_EMBEDDING_API_KEY || 'not-needed',
+        maxRetries: env.LLM_MAX_RETRIES,
         baseURL: env.OPENAI_EMBEDDING_BASE_URL,
       });
     } else {

@@ -34,12 +34,42 @@ const envSchema = z.object({
 
   // Where connected repositories are cloned for local investigation.
   WORKSPACE_DIR: z.string().default('./workspace'),
+  // Shallow-clone depth (how much git history to fetch).
+  CLONE_DEPTH: z.coerce.number().default(50),
 
   // Read-only token, only needed to clone private repos.
   GITHUB_TOKEN: z.string().default(''),
 
   // Safety bound on the agent's tool-calling loop.
   AGENT_MAX_STEPS: z.coerce.number().default(12),
+
+  // Retries (with backoff) for transient LLM provider errors (e.g. 429s).
+  LLM_MAX_RETRIES: z.coerce.number().default(4),
+
+  // ---- Auth ----
+  JWT_SECRET: z.string().default('dev-insecure-secret-change-me'),
+  JWT_EXPIRES_IN: z.string().default('7d'),
+  // Optional Google OAuth (provide to enable the "Sign in with Google" flow).
+  GOOGLE_CLIENT_ID: z.string().default(''),
+  GOOGLE_CLIENT_SECRET: z.string().default(''),
+  OAUTH_REDIRECT_URI: z
+    .string()
+    .default('http://localhost:4000/api/auth/google/callback'),
+  CLIENT_URL: z.string().default('http://localhost:5173'),
+
+  // ---- Database MCP (read-only introspection target) ----
+  // Defaults to the app's own Postgres; point at any read-only DB to inspect.
+  DB_MCP_URL: z.string().default(''),
+
+  // ---- Logs MCP ----
+  // Directory of *.log files the logs MCP server searches.
+  LOGS_DIR: z.string().default('./logs'),
+
+  // Enable human-approved write actions (off by default = fully read-only).
+  ENABLE_WRITE_ACTIONS: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
 });
 
 const parsed = envSchema.safeParse(process.env);

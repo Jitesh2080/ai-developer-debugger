@@ -109,12 +109,22 @@ export class McpRegistry {
     name: string,
     args: Record<string, unknown>,
   ): Promise<McpToolResult & { server: string }> {
-    const server = this.toolToServer.get(name);
+    // Some models prefix tool names (e.g. "repo_browser.list_files"); fall back
+    // to matching the final segment against a known tool.
+    let resolvedName = name;
+    let server = this.toolToServer.get(resolvedName);
+    if (!server && name.includes('.')) {
+      const suffix = name.slice(name.lastIndexOf('.') + 1);
+      if (this.toolToServer.has(suffix)) {
+        resolvedName = suffix;
+        server = this.toolToServer.get(suffix);
+      }
+    }
     if (!server) {
       return { server: 'unknown', isError: true, text: `Unknown tool: ${name}` };
     }
     const client = this.clients.get(server)!;
-    const result = await client.callTool(name, args);
+    const result = await client.callTool(resolvedName, args);
     return { server, ...result };
   }
 

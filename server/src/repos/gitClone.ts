@@ -51,12 +51,15 @@ export async function cloneOrPull(params: {
 
   await simpleGit().clone(authenticatedUrl(params.url), dest, [
     '--depth',
-    '50',
+    String(env.CLONE_DEPTH),
     '--branch',
     params.defaultBranch,
   ]).catch(async () => {
     // Fall back to default branch if the requested branch doesn't exist.
-    await simpleGit().clone(authenticatedUrl(params.url), dest, ['--depth', '50']);
+    await simpleGit().clone(authenticatedUrl(params.url), dest, [
+      '--depth',
+      String(env.CLONE_DEPTH),
+    ]);
   });
 
   return dest;

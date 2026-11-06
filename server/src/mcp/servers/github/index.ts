@@ -26,7 +26,8 @@ server.tool(
   },
   async ({ query, maxResults, ignoreCase = true }) => {
     const limit = clamp(maxResults, 40, 1, 100);
-    const args = ['grep', '-n', '-I', '--no-color'];
+    // -E enables extended regex so alternations like "a|b" work as expected.
+    const args = ['grep', '-n', '-I', '-E', '--no-color'];
     if (ignoreCase) args.push('-i');
     args.push('-e', query);
     try {
