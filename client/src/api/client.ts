@@ -3,6 +3,7 @@ import type {
   DebugSessionDetail,
   DebugSessionSummary,
   DocumentMeta,
+  FixProposal,
   Project,
   Repository,
 } from '@ai-debugger/shared';
@@ -108,6 +109,26 @@ export const api = {
   getSession: (projectId: string, sessionId: string) =>
     json<DebugSessionDetail>(
       `/api/projects/${projectId}/sessions/${sessionId}`,
+    ),
+
+  proposeFix: (projectId: string, sessionId: string) =>
+    json<FixProposal>(
+      `/api/projects/${projectId}/sessions/${sessionId}/propose-fix`,
+      { method: 'POST' },
+    ),
+  listProposals: (projectId: string, sessionId: string) =>
+    json<FixProposal[]>(
+      `/api/projects/${projectId}/sessions/${sessionId}/proposals`,
+    ),
+  approveProposal: (projectId: string, proposalId: string) =>
+    json<{ proposal: FixProposal; writesEnabled: boolean }>(
+      `/api/projects/${projectId}/proposals/${proposalId}/approve`,
+      { method: 'POST' },
+    ),
+  rejectProposal: (projectId: string, proposalId: string) =>
+    json<{ proposal: FixProposal }>(
+      `/api/projects/${projectId}/proposals/${proposalId}/reject`,
+      { method: 'POST' },
     ),
 };
 

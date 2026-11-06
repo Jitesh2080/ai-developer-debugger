@@ -4,6 +4,7 @@ import type { DebugSessionDetail } from '@ai-debugger/shared';
 import { api } from '../api/client';
 import { Layout } from '../components/Layout';
 import { DiagnosisCard } from '../components/DiagnosisCard';
+import { FixProposals } from '../components/FixProposals';
 
 export function SessionDetailPage() {
   const { projectId = '', sessionId = '' } = useParams();
@@ -94,6 +95,14 @@ export function SessionDetailPage() {
           </section>
 
           {session.solution && <DiagnosisCard d={session.solution} />}
+
+          {session.solution && (
+            <FixProposals
+              projectId={projectId}
+              sessionId={sessionId}
+              canPropose={true}
+            />
+          )}
         </div>
       )}
     </Layout>

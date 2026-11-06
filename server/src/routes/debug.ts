@@ -1,8 +1,14 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import type { AgentEvent } from '@ai-debugger/shared';
+import { env } from '../config/env.js';
 import { runInvestigation } from '../agent/debugger.js';
 import { getLlmProvider } from '../llm/index.js';
+import {
+  generateProposal,
+  listProposals,
+  resolveProposal,
+} from '../services/fixProposals.js';
 import {
   createAgentRun,
   createSession,
@@ -100,4 +106,62 @@ debugRouter.get('/sessions/:sessionId', async (req, res) => {
     return;
   }
   res.json(detail);
+});
+
+// ---- Human-in-the-loop fix proposals ----
+
+/** Generate a proposed fix from a session's diagnosis (nothing is written). */
+debugRouter.post('/sessions/:sessionId/propose-fix', async (req, res) => {
+  const { projectId, sessionId } = req.params as {
+    projectId: string;
+    sessionId: string;
+  };
+  try {
+    const proposal = await generateProposal(projectId, sessionId);
+    res.status(201).json(proposal);
+  } catch (err) {
+    res.status(400).json({ error: (err as Error).message });
+  }
+});
+
+debugRouter.get('/sessions/:sessionId/proposals', async (req, res) => {
+  const { sessionId } = req.params as { sessionId: string };
+  res.json(await listProposals(sessionId));
+});
+
+/** Approve a proposal (writes to the clone only if write actions are enabled). */
+debugRouter.post('/proposals/:proposalId/approve', async (req, res) => {
+  const { projectId, proposalId } = req.params as {
+    projectId: string;
+    proposalId: string;
+  };
+  try {
+    const proposal = await resolveProposal({
+      projectId,
+      proposalId,
+      action: 'approve',
+      writeEnabled: env.ENABLE_WRITE_ACTIONS,
+    });
+    res.json({ proposal, writesEnabled: env.ENABLE_WRITE_ACTIONS });
+  } catch (err) {
+    res.status(400).json({ error: (err as Error).message });
+  }
+});
+
+debugRouter.post('/proposals/:proposalId/reject', async (req, res) => {
+  const { projectId, proposalId } = req.params as {
+    projectId: string;
+    proposalId: string;
+  };
+  try {
+    const proposal = await resolveProposal({
+      projectId,
+      proposalId,
+      action: 'reject',
+      writeEnabled: env.ENABLE_WRITE_ACTIONS,
+    });
+    res.json({ proposal });
+  } catch (err) {
+    res.status(400).json({ error: (err as Error).message });
+  }
 });

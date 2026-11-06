@@ -76,3 +76,15 @@ export interface StartInvestigationRequest {
   title?: string;
   errorText: string;
 }
+
+export interface FixProposal {
+  id: string;
+  debugSessionId: string;
+  filePath: string;
+  originalContent: string;
+  proposedContent: string;
+  explanation: string;
+  status: 'pending' | 'approved' | 'rejected' | 'applied';
+  createdAt: string;
+  resolvedAt: string | null;
+}
