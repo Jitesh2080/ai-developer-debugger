@@ -42,6 +42,16 @@ const SERVERS: ServerSpec[] = [
     dir: 'docs',
     env: (ctx) => ({ PROJECT_ID: ctx.projectId }),
   },
+  {
+    name: 'database',
+    dir: 'database',
+    env: () => ({}), // reads DB_MCP_URL / DATABASE_URL from the inherited env
+  },
+  {
+    name: 'logs',
+    dir: 'logs',
+    env: () => ({}), // reads LOGS_DIR from the inherited env
+  },
 ];
 
 /**
