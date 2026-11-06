@@ -6,22 +6,67 @@ import type {
   Project,
   Repository,
 } from '@ai-debugger/shared';
+import { clearToken, getToken } from '../auth/token';
 
 const BASE_URL =
   (import.meta.env.VITE_API_BASE_URL as string | undefined) ??
   'http://localhost:4000';
 
+export interface AuthUser {
+  id: string;
+  email: string;
+  name: string;
+  avatarUrl: string | null;
+}
+
+function authHeaders(): Record<string, string> {
+  const token = getToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+/** On an expired/invalid session, drop the token and bounce to login. */
+function handleUnauthorized() {
+  clearToken();
+  if (!location.pathname.startsWith('/login')) {
+    location.href = '/login';
+  }
+}
+
 async function json<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(),
+      ...(init?.headers ?? {}),
+    },
     ...init,
   });
+  if (res.status === 401) {
+    handleUnauthorized();
+    throw new Error('Session expired. Please sign in again.');
+  }
   if (!res.ok) {
     const body = await res.text();
     throw new Error(`${res.status}: ${body}`);
   }
   return res.json() as Promise<T>;
 }
+
+export const authApi = {
+  register: (email: string, password: string, name?: string) =>
+    json<{ token: string; user: AuthUser }>('/api/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ email, password, name }),
+    }),
+  login: (email: string, password: string) =>
+    json<{ token: string; user: AuthUser }>('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    }),
+  me: () => json<{ user: AuthUser }>('/api/auth/me'),
+  config: () => json<{ googleEnabled: boolean }>('/api/auth/config'),
+  googleUrl: () => `${BASE_URL}/api/auth/google`,
+};
 
 export const api = {
   listProjects: () => json<Project[]>('/api/projects'),
@@ -47,8 +92,13 @@ export const api = {
     form.append('file', file);
     const res = await fetch(`${BASE_URL}/api/projects/${projectId}/documents`, {
       method: 'POST',
+      headers: authHeaders(),
       body: form,
     });
+    if (res.status === 401) {
+      handleUnauthorized();
+      throw new Error('Session expired. Please sign in again.');
+    }
     if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
     return (await res.json()) as DocumentMeta;
   },
@@ -74,7 +124,7 @@ export async function streamInvestigation(
 ): Promise<void> {
   const res = await fetch(`${BASE_URL}/api/projects/${projectId}/debug`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify({ errorText }),
     signal,
   });

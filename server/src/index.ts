@@ -1,6 +1,8 @@
 import cors from 'cors';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { env } from './config/env.js';
+import { requireAuth, requireProjectAccess } from './middleware/auth.js';
+import { authRouter } from './routes/auth.js';
 import { debugRouter } from './routes/debug.js';
 import { documentsRouter } from './routes/documents.js';
 import { projectsRouter } from './routes/projects.js';
@@ -15,10 +17,29 @@ export function createApp() {
     res.json({ status: 'ok', provider: env.LLM_PROVIDER });
   });
 
-  app.use('/api/projects', projectsRouter);
-  app.use('/api/projects/:projectId/repositories', repositoriesRouter);
-  app.use('/api/projects/:projectId/documents', documentsRouter);
-  app.use('/api/projects/:projectId', debugRouter);
+  // Public auth endpoints (register/login/google).
+  app.use('/api/auth', authRouter);
+
+  // Everything below requires a valid JWT; project subroutes also check ownership.
+  app.use('/api/projects', requireAuth, projectsRouter);
+  app.use(
+    '/api/projects/:projectId/repositories',
+    requireAuth,
+    requireProjectAccess,
+    repositoriesRouter,
+  );
+  app.use(
+    '/api/projects/:projectId/documents',
+    requireAuth,
+    requireProjectAccess,
+    documentsRouter,
+  );
+  app.use(
+    '/api/projects/:projectId',
+    requireAuth,
+    requireProjectAccess,
+    debugRouter,
+  );
 
   // Centralized error handler.
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {

@@ -2,7 +2,6 @@ import { Router } from 'express';
 import { z } from 'zod';
 import type { Project } from '@ai-debugger/shared';
 import { query } from '../db/pool.js';
-import { LOCAL_USER_ID } from '../services/sessionStore.js';
 
 export const projectsRouter = Router();
 
@@ -27,11 +26,11 @@ function mapProject(r: ProjectRow): Project {
   };
 }
 
-projectsRouter.get('/', async (_req, res) => {
+projectsRouter.get('/', async (req, res) => {
   const { rows } = await query<ProjectRow>(
     `SELECT id, name, description, created_at FROM projects
       WHERE user_id = $1 ORDER BY created_at DESC`,
-    [LOCAL_USER_ID],
+    [req.userId!],
   );
   res.json(rows.map(mapProject));
 });
@@ -45,15 +44,16 @@ projectsRouter.post('/', async (req, res) => {
   const { rows } = await query<ProjectRow>(
     `INSERT INTO projects (user_id, name, description)
      VALUES ($1, $2, $3) RETURNING id, name, description, created_at`,
-    [LOCAL_USER_ID, parsed.data.name, parsed.data.description ?? null],
+    [req.userId!, parsed.data.name, parsed.data.description ?? null],
   );
   res.status(201).json(mapProject(rows[0]!));
 });
 
 projectsRouter.get('/:projectId', async (req, res) => {
   const { rows } = await query<ProjectRow>(
-    `SELECT id, name, description, created_at FROM projects WHERE id = $1`,
-    [req.params.projectId],
+    `SELECT id, name, description, created_at FROM projects
+      WHERE id = $1 AND user_id = $2`,
+    [req.params.projectId, req.userId!],
   );
   if (rows.length === 0) {
     res.status(404).json({ error: 'Project not found' });
